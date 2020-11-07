@@ -108,6 +108,7 @@ const initial: ImmutableType<uiState> = Immutable({
   showWindowControls: '',
   quickEdit: false,
   webGLRenderer: true,
+  webLinksActivationKey: '',
   macOptionSelectionMode: 'vertical',
   disableLigatures: false
 });
@@ -238,7 +239,7 @@ const reducer = (state = initial, action: HyperActions) => {
               ret.modifierKeys = config.modifierKeys;
             }
 
-            if (allowedHamburgerMenuValues.has(config.showHamburgerMenu)) {
+            if (allowedHamburgerMenuValues.has(config.showHamburgerMenu as any)) {
               ret.showHamburgerMenu = config.showHamburgerMenu;
             }
 
@@ -254,6 +255,10 @@ const reducer = (state = initial, action: HyperActions) => {
 
             if (config.webGLRenderer !== undefined) {
               ret.webGLRenderer = config.webGLRenderer;
+            }
+
+            if (config.webLinksActivationKey !== undefined) {
+              ret.webLinksActivationKey = config.webLinksActivationKey;
             }
 
             if (config.macOptionSelectionMode) {

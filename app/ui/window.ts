@@ -1,5 +1,5 @@
 import {app, BrowserWindow, shell, Menu, BrowserWindowConstructorOptions} from 'electron';
-import {isAbsolute} from 'path';
+import {isAbsolute, normalize, sep} from 'path';
 import {parse as parseUrl} from 'url';
 import {v4 as uuidv4} from 'uuid';
 import fileUriToPath from 'file-uri-to-path';
@@ -24,27 +24,25 @@ export function newWindow(
   const classOpts = Object.assign({uid: uuidv4()});
   app.plugins.decorateWindowClass(classOpts);
 
-  const winOpts = Object.assign(
-    {
-      minWidth: 370,
-      minHeight: 190,
-      backgroundColor: toElectronBackgroundColor(cfg.backgroundColor || '#000'),
-      titleBarStyle: 'hiddenInset',
-      title: 'Hyper.app',
-      // we want to go frameless on Windows and Linux
-      frame: process.platform === 'darwin',
-      transparent: process.platform === 'darwin',
-      icon,
-      show: process.env.HYPER_DEBUG || process.env.HYPERTERM_DEBUG || isDev,
-      acceptFirstMouse: true,
-      webPreferences: {
-        nodeIntegration: true,
-        navigateOnDragDrop: true
-      }
+  const winOpts: BrowserWindowConstructorOptions = {
+    minWidth: 370,
+    minHeight: 190,
+    backgroundColor: toElectronBackgroundColor(cfg.backgroundColor || '#000'),
+    titleBarStyle: 'hiddenInset',
+    title: 'Hyper.app',
+    // we want to go frameless on Windows and Linux
+    frame: process.platform === 'darwin',
+    transparent: process.platform === 'darwin',
+    icon,
+    show: Boolean(process.env.HYPER_DEBUG || process.env.HYPERTERM_DEBUG || isDev),
+    acceptFirstMouse: true,
+    webPreferences: {
+      nodeIntegration: true,
+      navigateOnDragDrop: true,
+      enableRemoteModule: true
     },
-    options_
-  );
-
+    ...options_
+  };
   const window = new BrowserWindow(app.plugins.getDecoratedBrowserOptions(winOpts));
   window.uid = classOpts.uid;
 
@@ -60,9 +58,16 @@ export function newWindow(
   };
 
   // set working directory
+  let argPath = process.argv[1];
+  if (argPath && process.platform === 'win32') {
+    if (/[a-zA-Z]:"/.test(argPath)) {
+      argPath = argPath.replace('"', sep);
+    }
+    argPath = normalize(argPath + sep);
+  }
   let workingDirectory = homeDirectory;
-  if (process.argv[1] && isAbsolute(process.argv[1])) {
-    workingDirectory = process.argv[1];
+  if (argPath && isAbsolute(argPath)) {
+    workingDirectory = argPath;
   } else if (cfg.workingDirectory && isAbsolute(cfg.workingDirectory)) {
     workingDirectory = cfg.workingDirectory;
   }
@@ -100,7 +105,7 @@ export function newWindow(
     // and createWindow definition. It's executed in place of
     // the callback passed as parameter, and deleted right after.
     (app.windowCallback || fn)(window);
-    delete app.windowCallback;
+    app.windowCallback = undefined;
     fetchNotifications(window);
     // auto updates
     if (!isDev) {
@@ -112,6 +117,10 @@ export function newWindow(
 
   function createSession(extraOptions: any = {}) {
     const uid = uuidv4();
+    const extraOptionsFiltered: any = {};
+    Object.keys(extraOptions).forEach((key) => {
+      if (extraOptions[key] !== undefined) extraOptionsFiltered[key] = extraOptions[key];
+    });
 
     // remove the rows and cols, the wrong value of them will break layout when init create
     const defaultOptions = Object.assign(
@@ -121,7 +130,7 @@ export function newWindow(
         shell: cfg.shell,
         shellArgs: cfg.shellArgs && Array.from(cfg.shellArgs)
       },
-      extraOptions,
+      extraOptionsFiltered,
       {uid}
     );
     const options = decorateSessionOptions(defaultOptions);
@@ -131,7 +140,7 @@ export function newWindow(
     return {session, options};
   }
 
-  rpc.on('new', extraOptions => {
+  rpc.on('new', (extraOptions) => {
     const {session, options} = createSession(extraOptions);
 
     sessions.set(options.uid, session);
@@ -145,7 +154,7 @@ export function newWindow(
       activeUid: options.activeUid
     });
 
-    session.on('data', (data: any) => {
+    session.on('data', (data: string) => {
       rpc.emit('session data', data);
     });
 
@@ -198,7 +207,7 @@ export function newWindow(
   rpc.on('open external', ({url}) => {
     shell.openExternal(url);
   });
-  rpc.on('open context menu', selection => {
+  rpc.on('open context menu', (selection) => {
     const {createWindow} = app;
     const {buildFromTemplate} = Menu;
     buildFromTemplate(contextMenuTemplate(createWindow, selection)).popup({window});
@@ -219,7 +228,7 @@ export function newWindow(
   rpc.on('close', () => {
     window.close();
   });
-  rpc.on('command', command => {
+  rpc.on('command', (command) => {
     const focusedWindow = BrowserWindow.getFocusedWindow();
     execCommand(command, focusedWindow!);
   });

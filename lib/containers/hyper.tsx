@@ -10,34 +10,34 @@ import {HeaderContainer} from './header';
 import TermsContainer from './terms';
 import NotificationsContainer from './notifications';
 import {HyperState, HyperProps, HyperDispatch} from '../hyper';
+import Terms from '../components/terms';
 
 const isMac = /Mac/.test(navigator.userAgent);
 
-class Hyper extends React.PureComponent<HyperProps, {lastConfigUpdate: number}> {
+class Hyper extends React.PureComponent<HyperProps> {
   mousetrap!: MousetrapInstance;
-  terms: any;
-  constructor(props: any) {
+  terms!: Terms;
+  constructor(props: HyperProps) {
     super(props);
-    this.state = {
-      lastConfigUpdate: 0
-    };
   }
-  //TODO: Remove usage of legacy and soon deprecated lifecycle methods
-  UNSAFE_componentWillReceiveProps(next: HyperProps) {
-    if (this.props.backgroundColor !== next.backgroundColor) {
+
+  componentDidUpdate(prev: HyperProps) {
+    if (this.props.backgroundColor !== prev.backgroundColor) {
       // this can be removed when `setBackgroundColor` in electron
       // starts working again
-      document.body.style.backgroundColor = next.backgroundColor;
+      document.body.style.backgroundColor = this.props.backgroundColor;
     }
-    const {lastConfigUpdate} = next;
-    if (lastConfigUpdate && lastConfigUpdate !== this.state.lastConfigUpdate) {
-      this.setState({lastConfigUpdate});
+    const {lastConfigUpdate} = this.props;
+    if (lastConfigUpdate && lastConfigUpdate !== prev.lastConfigUpdate) {
       this.attachKeyListeners();
+    }
+    if (prev.activeSession !== this.props.activeSession) {
+      this.handleFocusActive(this.props.activeSession!);
     }
   }
 
-  handleFocusActive = (uid: string) => {
-    const term = this.terms.getTermByUid(uid);
+  handleFocusActive = (uid?: string) => {
+    const term = uid && this.terms.getTermByUid(uid);
     if (term) {
       term.focus();
     }
@@ -61,8 +61,8 @@ class Hyper extends React.PureComponent<HyperProps, {lastConfigUpdate: number}> 
       this.mousetrap.reset();
     }
 
-    const keys: Record<string, any> = getRegisteredKeys();
-    Object.keys(keys).forEach(commandKeys => {
+    const keys = getRegisteredKeys();
+    Object.keys(keys).forEach((commandKeys) => {
       this.mousetrap.bind(
         commandKeys,
         (e: any) => {
@@ -82,20 +82,14 @@ class Hyper extends React.PureComponent<HyperProps, {lastConfigUpdate: number}> 
     window.rpc.on('term selectAll', this.handleSelectAll);
   }
 
-  onTermsRef = (terms: any) => {
+  onTermsRef = (terms: Terms) => {
     this.terms = terms;
     window.focusActiveTerm = this.handleFocusActive;
   };
 
-  componentDidUpdate(prev: HyperProps) {
-    if (prev.activeSession !== this.props.activeSession) {
-      this.handleFocusActive(this.props.activeSession!);
-    }
-  }
-
   componentWillUnmount() {
     document.body.style.backgroundColor = 'inherit';
-    this.mousetrap && this.mousetrap.reset();
+    this.mousetrap?.reset();
   }
 
   render() {
@@ -160,7 +154,7 @@ const mapStateToProps = (state: HyperState) => {
 
 const mapDispatchToProps = (dispatch: HyperDispatch) => {
   return {
-    execCommand: (command: any, fn: any, e: any) => {
+    execCommand: (command: string, fn: (e: any, dispatch: HyperDispatch) => void, e: any) => {
       dispatch(uiActions.execCommand(command, fn, e));
     }
   };

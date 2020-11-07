@@ -29,18 +29,13 @@ if (process.platform === 'win32') {
   switch (process.argv[1]) {
     case '--squirrel-install':
     case '--squirrel-updated':
-      systemContextMenu.add(() => {
-        checkSquirrel();
-      });
+      systemContextMenu.add();
       break;
     case '--squirrel-uninstall':
-      systemContextMenu.remove(() => {
-        checkSquirrel();
-      });
+      systemContextMenu.remove();
       break;
-    default:
-      checkSquirrel();
   }
+  checkSquirrel();
 }
 
 // Native
@@ -51,28 +46,6 @@ import {app, BrowserWindow, Menu} from 'electron';
 import {gitDescribe} from 'git-describe';
 import isDev from 'electron-is-dev';
 import * as config from './config';
-
-// Hack - this declararion doesn't work when put into ./ext-modules.d.ts for some reason so it's in this file for the time being
-declare module 'electron' {
-  interface App {
-    config: typeof import('./config');
-    plugins: typeof import('./plugins');
-    getWindows: () => Set<BrowserWindow>;
-    getLastFocusedWindow: () => BrowserWindow | null;
-    windowCallback: (win: BrowserWindow) => void;
-    createWindow: (fn?: (win: BrowserWindow) => void, options?: Record<string, any>) => BrowserWindow;
-    setVersion: (version: string) => void;
-  }
-
-  type Server = import('./rpc').Server;
-  interface BrowserWindow {
-    uid: string;
-    sessions: Map<any, any>;
-    focusTime: number;
-    clean: () => void;
-    rpc: Server;
-  }
-}
 
 // set up config
 config.setup();
@@ -124,12 +97,13 @@ function installDevExtensions(isDev_: boolean) {
   if (!isDev_) {
     return Promise.resolve([]);
   }
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const installer = require('electron-devtools-installer') as typeof import('electron-devtools-installer');
 
   const extensions = ['REACT_DEVELOPER_TOOLS', 'REDUX_DEVTOOLS'] as const;
   const forceDownload = Boolean(process.env.UPGRADE_EXTENSIONS);
 
-  return Promise.all(extensions.map(name => installer.default(installer[name], forceDownload)));
+  return Promise.all(extensions.map((name) => installer.default(installer[name], forceDownload)));
 }
 
 app.on('ready', () =>
@@ -249,7 +223,7 @@ app.on('ready', () =>
         installCLI(false);
       }
     })
-    .catch(err => {
+    .catch((err) => {
       console.error('Error while loading devtools extensions', err);
     })
 );
